@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.12;
 
-contract MultiSigWallent {
+contract MultiSigWallet {
     event Deposit(address indexed sender, uint256 amount);
     event Submit(uint256 indexed transactionId);
     event Approve(address indexed owner, uint256 indexed transactionId);
@@ -147,5 +147,9 @@ contract MultiSigWallent {
         require(approved[_transactionId][msg.sender], "Not approved");
         approved[_transactionId][msg.sender] = false;
         emit Revoke(msg.sender, _transactionId);
+    }
+
+    function getTransactionLength() external view returns (uint256) {
+        return transactions.length;
     }
 }
