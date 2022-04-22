@@ -1,36 +1,32 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.12;
 
-interface IERC721 {
-    function transferFrom(
-        address _from,
-        address _to,
-        uint256 _tokenId
-    ) external;
-}
+import {IERC721} from "../lib/openzeppelin-contracts/contracts/interfaces/IERC721.sol";
 
 contract EnglishAuction {
     event Bid(address indexed bidder, uint256 amount);
+    event Withdraw(address indexed bidder, uint256 amount);
+    event End(address winner, uint256 amount);
 
-    struct Bidder {
-        address bidder;
-        uint256 bid;
-    }
+    // struct Bidder {
+    //     address bidder;
+    //     uint256 bid;
+    // }
 
     bool public started;
     bool public ended;
 
-    uint256 private constant DURATION = 1 minutes;
+    uint256 private constant DURATION = 10 minutes;
 
     IERC721 public immutable token;
     uint256 public immutable tokenId;
 
     address payable public immutable seller;
-    uint256 public immutable askingPrice;
     uint256 public expiresAt;
 
+    uint256 public highestBid;
     mapping(address => uint256) bids;
-    Bidder public winner;
+    address public highestBidder;
 
     receive() external payable {}
 
@@ -49,7 +45,7 @@ contract EnglishAuction {
             "Starting price must > discount rate * duration"
         );
         seller = payable(msg.sender);
-        askingPrice = _askingPrice;
+        highestBid = _askingPrice;
 
         token = IERC721(_token);
         tokenId = _tokenId;
@@ -63,19 +59,34 @@ contract EnglishAuction {
     }
 
     function bid() external payable {
-        require(msg.value >= askingPrice, "Below asking price");
+        require(started, "Not started yet");
+        require(msg.value > highestBid, "Below asking price");
         require(block.timestamp < expiresAt, "Auction has expired");
 
-        Bidder memory bidder = Bidder(msg.sender, msg.value);
-
-        if (bidder.bid > winner.bid) {
-            winner = bidder;
+        if (highestBidder != address(0)) {
+            bids[highestBidder] = highestBid;
         }
+
+        highestBid = msg.value;
+        highestBidder = msg.sender;
 
         emit Bid(msg.sender, msg.value);
     }
 
-    function transferOwnership() external onlySeller {
-        require(block.timestamp > expiresAt, "Auction hasn't expired");
+    function end() external onlySeller {
+        require(started, "Not started yet");
+        require(block.timestamp >= expiresAt, "Auction hasn't expired");
+        require(!ended, "ended");
+
+        ended = true;
+
+        if (highestBidder != address(0)) {
+            token.safeTransferFrom(address(this), highestBidder, tokenId);
+            seller.transfer(highestBid);
+        } else {
+            token.safeTransferFrom(address(this), seller, tokenId);
+        }
+
+        emit End(highestBidder, highestBid);
     }
 }
